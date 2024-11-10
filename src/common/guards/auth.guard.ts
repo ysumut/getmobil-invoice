@@ -14,14 +14,22 @@ import { AccessTokenPayloadDto } from '../decorators/access-token-payload.dto';
 import { mainDirectory } from '../../main';
 import { fsReadFile } from 'ts-loader/dist/utils';
 import { UserDto } from '../dtos/user.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable({ scope: Scope.REQUEST })
 export class AuthGuard implements CanActivate {
+  private readonly microserviceSecurityKey: string;
+
   constructor(
     private reflector: Reflector,
     private prismaService: PrismaService,
     private jwtService: JwtService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.microserviceSecurityKey = this.configService.getOrThrow<string>(
+      'MICROSERVICE_SECURITY_KEY',
+    );
+  }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.get<boolean>(
@@ -33,6 +41,12 @@ export class AuthGuard implements CanActivate {
     }
     try {
       const request = ctx.switchToHttp().getRequest();
+      if (
+        request.headers['microservice-security-key'] !=
+        this.microserviceSecurityKey
+      ) {
+        throw new HttpException('unauthenticated', HttpStatus.UNAUTHORIZED);
+      }
       const authorization = request.headers.authorization;
       if (!authorization) {
         throw new HttpException('unauthenticated', HttpStatus.UNAUTHORIZED);
